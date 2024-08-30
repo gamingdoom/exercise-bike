@@ -17,19 +17,35 @@ class Results(Enum):
     MOTOR_VOLTAGE_LUT_MISSING = 0x05
     SERVO_DEGREES_LUT_MISSING = 0x06
 
-class ExerciseBike:
-    def __init__(self, mode_flags: ModeFlags, serial_port: str = "/dev/ttyACM0", baud_rate: int = 115200):
-        self.mode_flags = mode_flags
+class Opcodes(Enum):
+    START = 0x01
+    KEEP_ALIVE = 0x02
+    STOP = 0x03
+    GET_WHEEL_VELOCITY = 0x04
+    SET_MOTOR_VOLTAGE = 0x05
+    SET_SERVO_DEGREES = 0x06
+    GET_MOTOR_VOLTAGE_LUT = 0x07
+    GET_SERVO_DEGREES_LUT = 0x08
+    SET_ACCELERATION = 0x09
+    SET_HID_CONTROLLER = 0x0A
+    EMERGENCY_STOP = 0x0C
 
-        self.arduino = serial.Serial(serial_port, baud_rate)
+class ExerciseBike:
+    def __init__(self, mode_flags: int, serial_port: str = "/dev/ttyACM0", baud_rate: int = 115200):
+        self.mode_flags = mode_flags
+        self.serial_port = serial_port
+        self.baud_rate = baud_rate
     
     def start(self):
+        # Connect via serial
+        self.arduino = serial.Serial(self.serial_port, self.baud_rate)
+
         # Send start message
-        self._send(0x01)
-        self._send(self.mode_flags)
+        self._send_opcode(Opcodes.START)
+        self._send(struct.pack("B", self.mode_flags))
 
         # Receive start message
-        if self._recv(1) != Results.SUCCESS:
+        if self._recv_result() != Results.SUCCESS:
             raise Exception("Failed to connect to bike!")
         
         # Launch thread that keeps connection alive
@@ -39,52 +55,54 @@ class ExerciseBike:
         
     def close(self):
         self.keep_alive_thread.terminate()
-        self._send(0x03)
-        res = self._recv(1)
+        self._send_opcode(Opcodes.STOP)
+        res = self._recv_result()
+        self.arduino.close()
 
         return res
         
     def get_wheel_velocity(self) -> float:
-        self._send(0x04)
+        self._send_opcode(Opcodes.GET_WHEEL_VELOCITY)
         return struct.unpack("f", self._recv(4))[0]
     
     def set_motor_voltage(self, voltage: float):
-        self._send(0x05)
+        self._send_opcode(Opcodes.SET_MOTOR_VOLTAGE)
         self._send(struct.pack("f", voltage))
 
-        return self._recv(1)
+        return self._recv_result()
         
     def set_servo_degrees(self, degrees: float):
-        self._send(0x06)
+        self._send_opcode(Opcodes.SET_SERVO_DEGREES)
         self._send(struct.pack("f", degrees))
 
-        return self._recv(1)
+        return self._recv_result()
     
     def get_motor_voltage_lut(self, steps: int, should_save_lut_to_persistent_storage: bool) -> str:
-        self._send(0x07)
+        self._send_opcode(Opcodes.GET_MOTOR_VOLTAGE_LUT)
         self._send(struct.pack("I?", steps, should_save_lut_to_persistent_storage))
         return self._recv_string()
     
     def get_servo_degrees_lut(self, steps: int, should_save_lut_to_persistent_storage: bool) -> str:
-        self._send(0x08)
+        self._send_opcode(Opcodes.GET_SERVO_DEGREES_LUT)
         self._send(struct.pack("B?", steps, should_save_lut_to_persistent_storage))
         return self._recv_string()
     
     def set_acceleration(self, acceleration: float):
-        self._send(0x09)
+        self._send_opcode(Opcodes.SET_ACCELERATION)
         self._send(struct.pack("f", acceleration))
 
-        return self._recv(1)
+        return self._recv_result()
     
-    def set_hid_throttle_and_brake(self, throttle_and_brake: int):
-        self._send(0x0A)
-        self._send(struct.pack("h", throttle_and_brake))
+    def set_hid_controller(self, throttle_and_brake: int, steering: int):
+        self._send_opcode(Opcodes.SET_HID_CONTROLLER)
+        self._send(struct.pack("hh", throttle_and_brake, steering))
 
-        return self._recv(1)
+        return self._recv_result()
     
     def emergency_stop(self):
-        self._send(0x0B)
+        self._send_opcode(Opcodes.EMERGENCY_STOP)
         self.keep_alive_thread.terminate()
+        self.arduino.close()
 
     def _keep_alive(self):
         while True:
@@ -96,13 +114,19 @@ class ExerciseBike:
         self.comms_lock.acquire()
         self.arduino.write(data)
         self.comms_lock.release()
-        
+
+    def _send_opcode(self, opcode: Opcodes):
+        self._send(struct.pack("B", opcode.value))
+
     def _recv(self, len: int) -> bytes:
         self.comms_lock.acquire()
         res = self.arduino.read(len)
         self.comms_lock.release()
 
         return res
+    
+    def _recv_result(self) -> Results:
+        return Results(struct.unpack("B", self._recv(1))[0])
 
     def _recv_string(self) -> str:
         self.comms_lock.acquire()

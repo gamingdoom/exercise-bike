@@ -13,21 +13,22 @@ AIR_DENSITY = 1.225
 BIKE_AND_RIDER_AREA = 0.5
 DRAG_COEFFICIENT = 1.0
 
-DEBUG = False
+DEBUG = True
 
 def main():
     # Create server socket
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     server_socket.bind(('0.0.0.0', 33356))
 
-    # Connect to bike
-    bike = ExerciseBike(ModeFlags.NORMAL)
-    bike.start()
-    print("Connected to bike!")
+    if not DEBUG:
+        # Connect to bike
+        bike = ExerciseBike(ModeFlags.NORMAL)
+        bike.start()
+        print("Connected to bike!")
 
-    velocity = bike.get_wheel_velocity() if not DEBUG else 5
-
-    if DEBUG:
+        velocity = bike.get_wheel_velocity()
+    else:
+        velocity = 5.0
         old_time = time.time()
 
     while input() != "q":

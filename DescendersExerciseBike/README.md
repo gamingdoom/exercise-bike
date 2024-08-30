@@ -1,0 +1,2 @@
+To Compile:
+``dotnet build``

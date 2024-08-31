@@ -7,9 +7,11 @@
 # directory = path.Path(__file__).absolute().parent
 # sys.path.append(directory)
 
-from ..driver import ExerciseBike, ModeFlags, Results
+from driver import ExerciseBike, ModeFlags, Results
 
 bike = ExerciseBike(ModeFlags.NORMAL)
+
+bike.start()
 
 motor_lut = bike.get_motor_voltage_lut(50, True)
 servo_lut = bike.get_servo_degrees_lut(60, True)

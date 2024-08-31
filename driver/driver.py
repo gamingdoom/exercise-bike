@@ -4,7 +4,7 @@ import time
 import struct
 import serial
 
-class ModeFlags(Enum):
+class ModeFlags():
     NORMAL = 0x00
     VIRTUAL_CONTROLLER = 0x01
 
@@ -35,6 +35,7 @@ class ExerciseBike:
         self.mode_flags = mode_flags
         self.serial_port = serial_port
         self.baud_rate = baud_rate
+        self.comms_lock = Lock()
     
     def start(self):
         # Connect via serial
@@ -49,7 +50,6 @@ class ExerciseBike:
             raise Exception("Failed to connect to bike!")
         
         # Launch thread that keeps connection alive
-        self.comms_lock = Lock()
         self.keep_alive_thread = Process(target=self._keep_alive)
         self.keep_alive_thread.start()
         
@@ -58,6 +58,11 @@ class ExerciseBike:
         self._send_opcode(Opcodes.STOP)
         res = self._recv_result()
         self.arduino.close()
+
+        try:
+            self.comms_lock.release()
+        except ValueError:
+            pass
 
         return res
         
@@ -104,6 +109,11 @@ class ExerciseBike:
         self.keep_alive_thread.terminate()
         self.arduino.close()
 
+        try:
+            self.comms_lock.release()
+        except ValueError:
+            pass
+        
     def _keep_alive(self):
         while True:
             self._send(0x02)

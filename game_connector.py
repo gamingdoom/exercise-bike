@@ -31,7 +31,7 @@ def main():
         velocity = 5.0
         old_time = time.time()
 
-    while input() != "q":
+    while True:
         # Read angle from client
         data, addr = server_socket.recvfrom(1024)
         angle = (struct.unpack("f", data)[0])
@@ -77,7 +77,8 @@ def main():
     server_socket.close()
 
     # Close bike
-    bike.close()
+    if not DEBUG:
+        bike.close()
 
 if __name__ == "__main__":
     main()
